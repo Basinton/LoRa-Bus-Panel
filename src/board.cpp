@@ -14,284 +14,373 @@
 /* Variables -----------------------------------------------------------------*/
 TaskHandle_t boardTaskHandle = NULL;
 
-SYSTEM_STATE boardState = INIT;
-uint8_t guestNumber     = 0;
+char debug_buffer[50];
+
+uint8_t errorCount[BUTTON_COUNT] = {0};
+
+BUTTON_ID buttonID = BUTTON_UNKNOWN;
+SYSTEM_STATE boardState[BUTTON_COUNT] = {INIT};
+uint8_t guestNumber[BUTTON_COUNT] = {0};
 
 uint8_t responseToStation[128] = {0};
-uint16_t responseToStationCRC  = 0;
+uint16_t responseToStationCRC = 0;
 
-int boardTimeout = 0;
+uint8_t boardTimeout[BUTTON_COUNT] = {0};
 
-uint8_t isStationAccept = 0;
-uint8_t isBusAccept     = 0;
-uint8_t isBusPass       = 0;
+uint8_t isStationAccept[BUTTON_COUNT] = {0};
+uint8_t isBusAccept[BUTTON_COUNT] = {0};
+uint8_t isBusPass[BUTTON_COUNT] = {0};
 
-uint8_t isReAckBusAccept       = 0;
-uint8_t isReAckBusPass         = 0;
-uint8_t isReAckBusCancel       = 0;
-uint8_t isReAckPassengerCancel = 0;
+uint8_t isReAckBusAccept[BUTTON_COUNT] = {0};
+uint8_t isReAckBusPass[BUTTON_COUNT] = {0};
+uint8_t isReAckBusCancel[BUTTON_COUNT] = {0};
+uint8_t isReAckPassengerCancel[BUTTON_COUNT] = {0};
 
-uint8_t isBusCancel          = 0;
-uint8_t isPassengerCancelAck = 0;
+uint8_t isBusCancel[BUTTON_COUNT] = {0};
+uint8_t isPassengerCancelAck[BUTTON_COUNT] = {0};
 
 /* Functions -----------------------------------------------------------------*/
-void boardAckToStation(SYSTEM_STATE state);
+void boardAckToStation(BUTTON_ID buttonID, SYSTEM_STATE state);
 void cancelProcess(void);
 
-void board_fsm_reset_state(SYSTEM_STATE state)
+void board_fsm_reset_state(BUTTON_ID buttonID = BUTTON_UNKNOWN, SYSTEM_STATE state = INIT)
 {
     switch (state)
     {
-        case WAITING:
-            led7_write(0, 0);
-            led7_write(1, 0);
+    case INIT:
+        for (int ledIndex = 0; ledIndex < NO_OF_LED7; ledIndex++)
+        {
+            led7_write(ledIndex, 0); // Turn off all LEDs
+        }
+        memset(isStationAccept, 0, sizeof(isStationAccept));
+        memset(isBusAccept, 0, sizeof(isBusAccept));
+        memset(isBusPass, 0, sizeof(isBusPass));
 
-            isStationAccept = 0;
-            isBusAccept     = 0;
-            isBusPass       = 0;
+        memset(isReAckBusAccept, 0, sizeof(isReAckBusAccept));
+        memset(isReAckBusPass, 0, sizeof(isReAckBusPass));
+        memset(isReAckBusCancel, 0, sizeof(isReAckBusCancel));
+        memset(isReAckPassengerCancel, 0, sizeof(isReAckPassengerCancel));
 
-            isReAckBusAccept       = 0;
-            isReAckBusPass         = 0;
-            isReAckBusCancel       = 0;
-            isReAckPassengerCancel = 0;
+        memset(isBusCancel, 0, sizeof(isBusCancel));
+        memset(isPassengerCancelAck, 0, sizeof(isPassengerCancelAck));
+        break;
 
-            isBusCancel          = 0;
-            isPassengerCancelAck = 0;
+    case WAITING:
+        Serial.println("board: \t [fsm] waiting");
+        break;
 
-            Serial.println("board: \t [fsm] waiting");
-            break;
+    case REQUEST_TO_STATION:
+        boardAckToStation(buttonID, REQUEST_TO_STATION);
+        boardTimeout[buttonID] = 40;
+        sprintf(debug_buffer, "board: request bus %d to station", buttonID);
+        Serial.println(debug_buffer);
+        break;
 
-        case REQUEST_TO_STATION:
-            boardAckToStation(REQUEST_TO_STATION);
-            boardTimeout = 40;
+    case REQUEST_TO_BUS:
+        sprintf(debug_buffer, "board: station accept and request to bus %d", buttonID);
+        Serial.println(debug_buffer);
+        break;
 
-            Serial.println("board: \t [fsm] request to station");
-            break;
+    case BUS_ACCEPT:
+        boardAckToStation(buttonID, BUS_ACCEPT);
 
-        case REQUEST_TO_BUS:
-            Serial.println("board: \t [fsm] station accept and request to bus");
-            break;
+        sprintf(debug_buffer, "board: bus %d accepted", buttonID);
+        Serial.println(debug_buffer);
+        break;
 
-        case BUS_ACCEPT:
-            boardAckToStation(BUS_ACCEPT);
+    case BUS_PASS:
+        guestNumber[buttonID] = 0;
+        led7_write_pro(buttonID, 0);
+        boardAckToStation(buttonID, BUS_PASS);
 
-            Serial.println("board: \t [fsm] bus accepted");
-            break;
+        sprintf(debug_buffer, "board: bus %d pass", buttonID);
+        Serial.println(debug_buffer);
+        break;
 
-        case BUS_PASS:
-            guestNumber = 0;
-            boardAckToStation(BUS_PASS);
+    case DRIVER_CANCEL:
+        guestNumber[buttonID] = 0;
+        led7_write_pro(buttonID, guestNumber[buttonID]);
+        boardAckToStation(buttonID, DRIVER_CANCEL);
 
-            Serial.printf("board: \t [fsm] bus pass\n");
-            break;
+        sprintf(debug_buffer, "board: bus %d cancel", buttonID);
+        Serial.println(debug_buffer);
+        break;
 
-        case DRIVER_CANCEL:
-            guestNumber = 0;
-            boardAckToStation(DRIVER_CANCEL);
+    case BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION:
+        if (long_press[buttonID])
+        {
+            guestNumber[buttonID]--;
+            led7_write_pro(buttonID, guestNumber[buttonID]);
+        }
 
-            Serial.printf("board: \t [fsm] bus cancel\n");
-            break;
+        if (guestNumber[buttonID] == 0)
+        {
+            boardAckToStation(buttonID, PASSENGER_CANCEL);
+            boardTimeout[buttonID] = 40;
 
-        case BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION:
-            boardAckToStation(PASSENGER_CANCEL);
-            boardTimeout = 40;
+            sprintf(debug_buffer, "board: notify passenger %d cancel", buttonID);
+            Serial.println(debug_buffer);
+        }
 
-            Serial.println("board: \t [fsm] notify passenger cancel");
-            break;
+        break;
 
-        case PASSENGER_CANCEL:
-            guestNumber = 0;
-            Serial.println("board: \t [fsm] passenger cancel");
+    case PASSENGER_CANCEL:
+        guestNumber[buttonID] = 0;
+        led7_write_pro(buttonID, guestNumber[buttonID]);
 
-            break;
+        sprintf(debug_buffer, "board: passenger %d cancel", buttonID);
+        Serial.println(debug_buffer);
+        break;
 
-        default:
-            break;
+    case ERROR_TIMEOUT:
+        sprintf(debug_buffer, "board: BUTTON %d error TIMEOUT", buttonID);
+        Serial.println(debug_buffer);
+        break;
+
+    default:
+        break;
     }
 }
 
 void board_fsm(void)
 {
-    switch (boardState)
+    for (int button_i = BUTTON_0; button_i <= BUTTON_4; button_i++)
     {
+        buttonID = (BUTTON_ID)button_i; // Cast integer back to BUTTON_ID for usage
+
+        switch (boardState[buttonID])
+        {
         case INIT:
-            led7_write(0, 0);
-            led7_write(1, 0);
-
+            board_fsm_reset_state(buttonID, INIT);
+            boardState[buttonID] = WAITING;
             Serial.println("board: \t [fsm] init");
-
-            board_fsm_reset_state(WAITING);
-            boardState = WAITING;
             break;
 
         case WAITING:
-            if (guestNumber > 0)
+            if (guestNumber[buttonID] > 0)
             {
-                board_fsm_reset_state(REQUEST_TO_STATION);
-                boardState = REQUEST_TO_STATION;
+                sprintf(debug_buffer, "board: passenger count bus %d: %d", buttonID, guestNumber[buttonID]);
+                Serial.println(debug_buffer);
+                board_fsm_reset_state(buttonID, REQUEST_TO_STATION);
+                boardState[buttonID] = REQUEST_TO_STATION;
             }
             break;
 
         case REQUEST_TO_STATION:
-            if (isStationAccept)
+            if (isStationAccept[buttonID])
             {
-                isStationAccept = 0;
+                isStationAccept[buttonID] = 0;
 
-                board_fsm_reset_state(REQUEST_TO_BUS);
-                boardState = REQUEST_TO_BUS;
+                board_fsm_reset_state(buttonID, REQUEST_TO_BUS);
+                boardState[buttonID] = REQUEST_TO_BUS;
             }
-            else if (--boardTimeout == 0)
+            else if (--boardTimeout[buttonID] == 0)
             {
-                board_fsm_reset_state(REQUEST_TO_STATION);
-                boardState = REQUEST_TO_STATION;
+                if (errorCount[buttonID] >= 20)
+                {
+                    errorCount[buttonID] = 0;
+                    board_fsm_reset_state(buttonID, ERROR_TIMEOUT);
+                    boardState[buttonID] = ERROR_TIMEOUT;
+                }
+                errorCount[buttonID]++;
+                board_fsm_reset_state(buttonID, REQUEST_TO_STATION);
+                boardState[buttonID] = REQUEST_TO_STATION;
             }
             break;
 
         case REQUEST_TO_BUS:
-            if (isBusAccept)
+            if (isBusAccept[buttonID])
             {
-                isBusAccept = 0;
+                isBusAccept[buttonID] = 0;
 
-                board_fsm_reset_state(BUS_ACCEPT);
-                boardState = BUS_ACCEPT;
+                board_fsm_reset_state(buttonID, BUS_ACCEPT);
+                boardState[buttonID] = BUS_ACCEPT;
             }
             break;
 
         case BUS_ACCEPT:
-            if (isBusPass)
+            if (isBusPass[buttonID])
             {
-                isBusPass = 0;
+                isBusPass[buttonID] = 0;
 
-                board_fsm_reset_state(BUS_PASS);
-                boardState = BUS_PASS;
+                board_fsm_reset_state(buttonID, BUS_PASS);
+                boardState[buttonID] = BUS_PASS;
             }
 
-            if (press_count[0] == 2)
+            if (long_press[buttonID])
             {
-                board_fsm_reset_state(BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION);
-                boardState = BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION;
+                Serial.println("cancle 1");
+                board_fsm_reset_state(buttonID, BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION);
+                boardState[buttonID] = BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION;
             }
             break;
 
         case BUS_PASS:
-            board_fsm_reset_state(WAITING);
-            boardState = WAITING;
+            board_fsm_reset_state(buttonID, WAITING);
+            boardState[buttonID] = WAITING;
             break;
 
         case DRIVER_CANCEL:
-            board_fsm_reset_state(WAITING);
-            boardState = WAITING;
+            board_fsm_reset_state(buttonID, WAITING);
+            boardState[buttonID] = WAITING;
             break;
 
         case BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION:
-            if (isPassengerCancelAck)
+            if (isPassengerCancelAck[buttonID])
             {
-                isPassengerCancelAck = 0;
+                isPassengerCancelAck[buttonID] = 0;
 
-                board_fsm_reset_state(PASSENGER_CANCEL);
-                boardState = PASSENGER_CANCEL;
+                board_fsm_reset_state(buttonID, PASSENGER_CANCEL);
+                boardState[buttonID] = PASSENGER_CANCEL;
             }
-            else if (--boardTimeout == 0)
+            else if (guestNumber[buttonID] == 0 && --boardTimeout[buttonID] == 0)
             {
-                board_fsm_reset_state(BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION);
-                boardState = BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION;
+                if (errorCount[buttonID] >= 20)
+                {
+                    errorCount[buttonID] = 0;
+                    board_fsm_reset_state(buttonID, ERROR_TIMEOUT);
+                    boardState[buttonID] = ERROR_TIMEOUT;
+                }
+                errorCount[buttonID]++;
+                board_fsm_reset_state(buttonID, BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION);
+                boardState[buttonID] = BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION;
             }
-
+            else if (guestNumber[buttonID] > 0)
+            {
+                board_fsm_reset_state(buttonID, BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION);
+            }
             break;
 
         case PASSENGER_CANCEL:
-            board_fsm_reset_state(WAITING);
-            boardState = WAITING;
+            board_fsm_reset_state(buttonID, WAITING);
+            boardState[buttonID] = WAITING;
+            break;
+
+        case ERROR_TIMEOUT:
+            board_fsm_reset_state(buttonID, WAITING);
+            boardState[buttonID] = WAITING;
             break;
 
         default:
-            boardState = INIT;
+            boardState[buttonID] = INIT;
             break;
+        }
     }
 }
 
 void cancelProcess(void)
 {
-    if (isBusCancel)
+    for (int button_i = BUTTON_0; button_i <= BUTTON_4; button_i++)
     {
-        isBusCancel = 0;
+        buttonID = (BUTTON_ID)button_i; // Cast integer back to BUTTON_ID for usage
+        if (isBusCancel[buttonID])
+        {
+            isBusCancel[buttonID] = 0;
 
-        board_fsm_reset_state(DRIVER_CANCEL);
-        boardState = DRIVER_CANCEL;
+            board_fsm_reset_state(buttonID, DRIVER_CANCEL);
+            boardState[buttonID] = DRIVER_CANCEL;
+        }
     }
 }
 
 void guest_handler(void)
 {
-    static int key_code_timeout = 0;
+    static int key_code_timeout[BUTTON_COUNT] = {0};
 
+    for (int button_i = BUTTON_0; button_i <= BUTTON_4; button_i++)
+    {
+        buttonID = (BUTTON_ID)button_i; // Cast integer back to BUTTON_ID for usage
+
+        if (press_count[buttonID])
+        {
+            guestNumber[buttonID]++;
+
+            if (guestNumber[buttonID] == 100)
+            {
+                guestNumber[buttonID] = 99;
+            }
+
+            if (guestNumber[buttonID] < 10)
+            {
+                if (buttonID == BUTTON_0)
+                {
+                    led7_write(buttonID * 2 + 1, 0);
+                    led7_write(buttonID * 2, guestNumber[buttonID]);
+                }
+                else
+                {
+                    led7_write(buttonID - 1, 0);
+                    led7_write(buttonID - 2, guestNumber[buttonID]);
+                }
+            }
+            else
+            {
+                if (buttonID == BUTTON_0)
+                {
+                    led7_write(buttonID * 2 + 1, guestNumber[buttonID] / 10);
+                    led7_write(buttonID * 2, guestNumber[buttonID] % 10);
+                }
+                else
+                {
+                    led7_write(buttonID - 1, guestNumber[buttonID] / 10);
+                    led7_write(buttonID - 2, guestNumber[buttonID] % 10);
+                }
+            }
+        }
+
+        // display button led
+        if (key_code_timeout[buttonID] > 0)
+            key_code_timeout[buttonID]--;
+
+        if (key_code[buttonID] > 0)
+        {
+            key_code_timeout[buttonID] = 5;
+            led_on(buttonID);
+        }
+        else if (key_code_timeout[buttonID] == 0)
+        {
+            led_off(buttonID);
+        }
+    }
     // read key_code and display LCD
-    if (key_code[0] == 5)
-    {
-        guestNumber++;
-
-        if (guestNumber == 100)
-        {
-            guestNumber = 99;
-        }
-
-        if (guestNumber < 10)
-        {
-            led7_write(1, 0);
-            led7_write(0, guestNumber);
-        }
-        else
-        {
-            led7_write(1, guestNumber / 10);
-            led7_write(0, guestNumber % 10);
-        }
-    }
-
-    // display button led
-    if (key_code_timeout > 0)
-        key_code_timeout--;
-
-    if (key_code[0] > 0)
-    {
-        key_code_timeout = 5;
-        led_on();
-    }
-    else if (key_code_timeout == 0)
-    {
-        led_off();
-    }
 }
 
 void station_ack_debuger(void)
 {
-    if (isReAckBusAccept)
+    for (int button_i = BUTTON_0; button_i <= BUTTON_4; button_i++)
     {
-        isReAckBusAccept = 0;
-        boardAckToStation(BUS_ACCEPT);
-    }
+        buttonID = (BUTTON_ID)button_i; // Cast integer back to BUTTON_ID for usage
 
-    if (isReAckBusPass)
-    {
-        isReAckBusPass = 0;
-        boardAckToStation(BUS_PASS);
-    }
+        if (isReAckBusAccept[buttonID])
+        {
+            isReAckBusAccept[buttonID] = 0;
+            boardAckToStation(buttonID, BUS_ACCEPT);
+        }
 
-    if (isReAckBusCancel)
-    {
-        isReAckBusCancel = 0;
-        boardAckToStation(DRIVER_CANCEL);
+        if (isReAckBusPass[buttonID])
+        {
+            isReAckBusPass[buttonID] = 0;
+            boardAckToStation(buttonID, BUS_PASS);
+        }
+
+        if (isReAckBusCancel[buttonID])
+        {
+            isReAckBusCancel[buttonID] = 0;
+            boardAckToStation(buttonID, DRIVER_CANCEL);
+        }
     }
 }
 
-void boardAckToStation(SYSTEM_STATE state)
+void boardAckToStation(BUTTON_ID buttonID, SYSTEM_STATE state)
 {
-    responseToStation[0] = state;
-    responseToStationCRC = CRC16((char *)responseToStation, 1);
-    responseToStation[1] = responseToStationCRC & 0xFF;
-    responseToStation[2] = responseToStationCRC >> 8;
-    responseToStation[3] = '\0';
+    responseToStation[0] = buttonID;
+    responseToStation[1] = state;
+    responseToStationCRC = CRC16((char *)responseToStation, 2);
+    responseToStation[2] = responseToStationCRC & 0xFF;
+    responseToStation[3] = responseToStationCRC >> 8;
+    responseToStation[4] = '\0';
     rs485_setmode(RS485_TRANSMIT);
-    RS485_Serial.write((const uint8_t *)responseToStation, 4);
+    RS485_Serial.write((const uint8_t *)responseToStation, 5);
     rs485_setmode(RS485_RECEIVE);
 }
 

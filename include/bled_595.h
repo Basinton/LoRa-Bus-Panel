@@ -1,4 +1,3 @@
-#pragma once
 #ifndef __BLED_595_H_
 #define __BLED_595_H_
 

@@ -8,9 +8,11 @@ TaskHandle_t b165TaskHandle = NULL;
 
 uint8_t b165_val;
 
-uint32_t key_code[BUTTON_N]         = {0};
-uint32_t press_count[BUTTON_N]      = {0};
+uint32_t key_code[BUTTON_N] = {0};
+uint32_t press_count[BUTTON_N] = {0};
+uint32_t long_press[BUTTON_N] = {0};
 uint32_t key_code_timeout[BUTTON_N] = {0};
+uint32_t keyTimeBeforeReleasing[BUTTON_N] = {0};
 
 uint8_t b165_read(int index)
 {
@@ -39,16 +41,19 @@ void b165_task(void *pvParameters)
             {
                 key_code[_i]++;
             }
-            else
+            else if (key_code[_i] > 0)
             {
                 if (key_code[_i] > 5)
                 {
-                    press_count[_i]++;
-                    key_code_timeout[_i] = 40;
-
-                    Serial.printf("but: \t %d times\n", press_count[_i]);
+                    long_press[_i]++;
+                    key_code[_i] = 0;
                 }
-
+                else if (key_code[_i] > 1)
+                {
+                    press_count[_i]++;
+                    key_code[_i] = 0;
+                }
+                key_code_timeout[_i] = 1;
                 key_code[_i] = 0;
             }
 
@@ -59,9 +64,9 @@ void b165_task(void *pvParameters)
             else
             {
                 press_count[_i] = 0;
+                long_press[_i] = 0;
             }
         }
-
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }

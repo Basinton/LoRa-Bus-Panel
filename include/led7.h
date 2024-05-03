@@ -1,9 +1,8 @@
-#pragma once
 #ifndef __LED7_H_
 #define __LED7_H_
 
 /* Includes ------------------------------------------------------------------*/
-
+#include "main.h"
 /* Define --------------------------------------------------------------------*/
 #define NO_OF_LED7 8
 
@@ -18,5 +17,6 @@
 
 void led7_init(void);
 void led7_write(int index, int value);
+void led7_write_pro(BUTTON_ID busstonID, uint8_t guestNumber);
 
 #endif

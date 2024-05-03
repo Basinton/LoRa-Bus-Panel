@@ -14,7 +14,7 @@
 /* Variables -----------------------------------------------------------------*/
 TaskHandle_t rs485TaskHandle = NULL;
 
-int RS485_RX_length                     = 0;
+int RS485_RX_length = 0;
 char RS485_RX_buffer[RS485_RX_BUF_SIZE] = {0};
 
 RS485_MODE RS485_mode = RS485_RECEIVE;
@@ -55,80 +55,85 @@ void rs485_setmode(RS485_MODE mode)
     }
 }
 
-void rs485_task(void)
+void rs485_task(void *pvParameters)
 {
-    RS485_RX_length = RS485_Serial.readBytes(RS485_RX_buffer, RS485_RX_BUF_SIZE);
-    for (int responseIndex = 0; responseIndex < RS485_RX_length / 4; ++responseIndex)
+    while (1)
     {
-        int startIndex = responseIndex * 4;
-
-        char *currentResponse = RS485_RX_buffer + startIndex;
-
-        // Serial.print("rs485: \t ");
-        // for (int i = 0; i < 4; i++)
-        // {
-        //     Serial.print(currentResponse[i], HEX);
-        //     Serial.print(" ");
-        // }
-        // Serial.println();
-
-        if (CRC16_check(currentResponse, 4))
+        RS485_RX_length = RS485_Serial.readBytes(RS485_RX_buffer, RS485_RX_BUF_SIZE);
+        for (int responseIndex = 0; responseIndex < RS485_RX_length / 5; ++responseIndex)
         {
-            switch (currentResponse[0])
+            int startIndex = responseIndex * 5;
+
+            char *currentResponse = RS485_RX_buffer + startIndex;
+
+            // Serial.print("rs485: \t ");
+            // for (int i = 0; i < 4; i++)
+            // {
+            //     Serial.print(currentResponse[i], HEX);
+            //     Serial.print(" ");
+            // }
+            // Serial.println();
+
+            if (CRC16_check(currentResponse, 5))
             {
+                buttonID = BUTTON_ID(currentResponse[0]);
+                switch (currentResponse[1])
+                {
                 case STATION_NOTIFY_ACCEPT_TO_BOARD:
-                    if (boardState == REQUEST_TO_STATION)
+                    if (boardState[buttonID] == REQUEST_TO_STATION)
                     {
-                        isStationAccept = 1;
+                        isStationAccept[buttonID] = 1;
                     }
 
                     break;
 
                 case STATION_NOTIFY_BUS_ACCEPT_TO_BOARD:
-                    if (boardState == REQUEST_TO_BUS)
+                    if (boardState[buttonID] == REQUEST_TO_BUS)
                     {
-                        isBusAccept = 1;
+                        isBusAccept[buttonID] = 1;
                     }
                     else
                     {
-                        isReAckBusAccept = 1;
+                        isReAckBusAccept[buttonID] = 1;
                     }
 
                     break;
 
                 case STATION_NOTIFY_BUS_PASS_TO_BOARD:
-                    if (boardState == BUS_ACCEPT)
+                    if (boardState[buttonID] == BUS_ACCEPT)
                     {
-                        isBusPass = 1;
+                        isBusPass[buttonID] = 1;
                     }
                     else
                     {
-                        isReAckBusPass = 1;
+                        isReAckBusPass[buttonID] = 1;
                     }
 
                     break;
 
                 case STATION_NOTIFY_DRIVER_CANCEL_TO_BOARD:
-                    if (boardState != WAITING)
+                    if (boardState[buttonID] != WAITING)
                     {
-                        isBusCancel = 1;
+                        isBusCancel[buttonID] = 1;
                     }
                     else
                     {
-                        isReAckBusCancel = 1;
+                        isReAckBusCancel[buttonID] = 1;
                     }
                     break;
 
                 case BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION:
-                    if (boardState == BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION)
+                    if (boardState[buttonID] == BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION)
                     {
-                        isPassengerCancelAck = 1;
+                        isPassengerCancelAck[buttonID] = 1;
                     }
 
                 default:
                     break;
+                }
             }
         }
+        vTaskDelay(pdMS_TO_TICKS(50)); // Adjust the delay duration as needed
     }
 }
 
@@ -139,7 +144,7 @@ void rs485_init()
     pinMode(RS485_EN, OUTPUT);
     rs485_setmode(RS485_RECEIVE);
 
-    // xTaskCreate(rs485_task, "Board Task", 4096, NULL, 2, &rs485TaskHandle);
+    xTaskCreate(rs485_task, "Board Task", 4096, NULL, 2, &rs485TaskHandle);
 
     Serial.println("rs485: \t [init]");
 }

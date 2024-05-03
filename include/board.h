@@ -1,13 +1,13 @@
-#pragma once
 #ifndef __BOARD_H_
 #define __BOARD_H_
 
 /* Includes ------------------------------------------------------------------*/
 #include <stdio.h>
-
+#include "main.h"
 /* Define --------------------------------------------------------------------*/
 typedef enum
 {
+    ERROR_TIMEOUT                            = -1,
     INIT                                     = 0,
     WAITING                                  = 1,
     REQUEST_TO_STATION                       = 2,
@@ -25,20 +25,20 @@ typedef enum
 } SYSTEM_STATE;
 
 /* Variables -----------------------------------------------------------------*/
-extern uint8_t isStationAccept;
-extern uint8_t isBusAccept;
-extern uint8_t isBusPass;
+extern uint8_t isStationAccept[BUTTON_COUNT];
+extern uint8_t isBusAccept[BUTTON_COUNT];
+extern uint8_t isBusPass[BUTTON_COUNT];
 
-extern uint8_t isReAckBusAccept;
-extern uint8_t isReAckBusPass;
-extern uint8_t isReAckBusCancel;
-extern uint8_t isReAckPassengerCancel;
+extern uint8_t isReAckBusAccept[BUTTON_COUNT];
+extern uint8_t isReAckBusPass[BUTTON_COUNT];
+extern uint8_t isReAckBusCancel[BUTTON_COUNT];
+extern uint8_t isReAckPassengerCancel[BUTTON_COUNT];
 
-extern uint8_t numberGuest;
-extern SYSTEM_STATE boardState;
+extern uint8_t numberGuest[];
+extern SYSTEM_STATE boardState[BUTTON_COUNT];
 
-extern uint8_t isBusCancel;
-extern uint8_t isPassengerCancelAck;
+extern uint8_t isBusCancel[BUTTON_COUNT];
+extern uint8_t isPassengerCancelAck[BUTTON_COUNT];
 
 /* Functions -----------------------------------------------------------------*/
 void board_init(void);

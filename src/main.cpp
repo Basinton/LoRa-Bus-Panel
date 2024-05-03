@@ -23,12 +23,6 @@ void setup()
     led_init();
 }
 
-uint32_t startCycle = 0;
 void loop()
 {
-    while (millis() - startCycle < 50)
-        ;
-    startCycle = millis();
-
-    rs485_task();
 }

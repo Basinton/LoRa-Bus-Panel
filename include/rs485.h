@@ -1,4 +1,3 @@
-#pragma once
 #ifndef __RS485_H_
 #define __RS485_H_
 

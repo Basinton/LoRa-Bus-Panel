@@ -1,4 +1,3 @@
-#pragma once
 #ifndef __BUTTON_165_H_
 #define __BUTTON_165_H_
 
@@ -16,6 +15,7 @@
 /* Variables -----------------------------------------------------------------*/
 extern uint32_t key_code[BUTTON_N];
 extern uint32_t press_count[BUTTON_N];
+extern uint32_t long_press[BUTTON_N];
 
 /* Functions -----------------------------------------------------------------*/
 void b165_init(void);
