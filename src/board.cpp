@@ -39,6 +39,8 @@ uint8_t isReAckPassengerCancel[BUTTON_COUNT] = {0};
 uint8_t isBusCancel[BUTTON_COUNT] = {0};
 uint8_t isPassengerCancelAck[BUTTON_COUNT] = {0};
 
+uint8_t isBusError[BUTTON_COUNT] = {0};
+
 /* Functions -----------------------------------------------------------------*/
 void boardAckToStation(BUTTON_ID buttonID, SYSTEM_STATE state);
 void cancelProcess(void);
@@ -66,6 +68,8 @@ void board_fsm_reset_state(BUTTON_ID buttonID = BUTTON_UNKNOWN, SYSTEM_STATE sta
         break;
 
     case WAITING:
+        guestNumber[buttonID] = 0;
+        led7_write_pro(buttonID, guestNumber[buttonID]);
         Serial.println("board: \t [fsm] waiting");
         break;
 
@@ -181,6 +185,7 @@ void board_fsm(void)
                     errorCount[buttonID] = 0;
                     board_fsm_reset_state(buttonID, ERROR_TIMEOUT);
                     boardState[buttonID] = ERROR_TIMEOUT;
+                    break;
                 }
                 errorCount[buttonID]++;
                 board_fsm_reset_state(buttonID, REQUEST_TO_STATION);
@@ -196,6 +201,13 @@ void board_fsm(void)
                 board_fsm_reset_state(buttonID, BUS_ACCEPT);
                 boardState[buttonID] = BUS_ACCEPT;
             }
+            else if (isBusError[buttonID])
+            {
+                isBusError[buttonID] = 0;
+                board_fsm_reset_state(buttonID, ERROR_TIMEOUT);
+                boardState[buttonID] = ERROR_TIMEOUT;
+                break;
+            }
             break;
 
         case BUS_ACCEPT:
@@ -209,7 +221,6 @@ void board_fsm(void)
 
             if (long_press[buttonID])
             {
-                Serial.println("cancle 1");
                 board_fsm_reset_state(buttonID, BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION);
                 boardState[buttonID] = BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION;
             }
@@ -240,6 +251,7 @@ void board_fsm(void)
                     errorCount[buttonID] = 0;
                     board_fsm_reset_state(buttonID, ERROR_TIMEOUT);
                     boardState[buttonID] = ERROR_TIMEOUT;
+                    break;
                 }
                 errorCount[buttonID]++;
                 board_fsm_reset_state(buttonID, BOARD_NOTIFY_PASSENGER_CANCEL_TO_STATION);
@@ -279,6 +291,13 @@ void cancelProcess(void)
 
             board_fsm_reset_state(buttonID, DRIVER_CANCEL);
             boardState[buttonID] = DRIVER_CANCEL;
+        }
+        else if (isBusError[buttonID])
+        {
+            isBusError[buttonID] = 0;
+            board_fsm_reset_state(buttonID, ERROR_TIMEOUT);
+            boardState[buttonID] = ERROR_TIMEOUT;
+            break;
         }
     }
 }

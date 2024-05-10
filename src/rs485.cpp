@@ -127,6 +127,10 @@ void rs485_task(void *pvParameters)
                     {
                         isPassengerCancelAck[buttonID] = 1;
                     }
+                    break;
+                case ERROR_TIMEOUT:
+                    isBusError[buttonID] = 1;
+                    break;
 
                 default:
                     break;

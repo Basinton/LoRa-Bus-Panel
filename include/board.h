@@ -7,7 +7,7 @@
 /* Define --------------------------------------------------------------------*/
 typedef enum
 {
-    ERROR_TIMEOUT                            = -1,
+    ERROR_TIMEOUT                            = 50,
     INIT                                     = 0,
     WAITING                                  = 1,
     REQUEST_TO_STATION                       = 2,
@@ -39,6 +39,8 @@ extern SYSTEM_STATE boardState[BUTTON_COUNT];
 
 extern uint8_t isBusCancel[BUTTON_COUNT];
 extern uint8_t isPassengerCancelAck[BUTTON_COUNT];
+
+extern uint8_t isBusError[BUTTON_COUNT];
 
 /* Functions -----------------------------------------------------------------*/
 void board_init(void);
