@@ -23,7 +23,7 @@ The LoRa Board allows users to call buses through push buttons and corresponding
      + PIN_M1    Pin 18
      + PIN_AUX   Pin 4
 4. **Configuration**  
-   Read the .h file for configuration information.
+   Read the `.h` file for configuration information.
 
 ## Usage
 1. **Upload Firmware**  
